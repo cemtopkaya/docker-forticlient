@@ -53,24 +53,33 @@ Sadece kullanıcı adı ve şifresiyle doğrulama yapıyorsanız ortam değişke
 
 Eğer iki etkili doğrulama (kullanıcı adı ve şifresinden sonra bir de ileti veya SMS ile gelen kodu) kullanıyorsanız bu kez bağlantı kuramayacağınız için konteynere konsolunuzu bağlayarak aşağıdaki komutu elle çalıştırarak bağlantı kurabilirsiniz.
 ```bash
-$ cd ~/deb/opt/forticlient-sslvpn/64bit
+$ cd /usr/share/forticlient/opt/forticlient-sslvpn/64bit/
 $ ./forticlientsslvpn_cli --server 176.236.170.162:443 --vpnuser cem.topkaya
 .... şifrenizi soracaktır,
 .... sonrasında gelecek kodunuzu gireceğiniz satırda bekleyecek,
 .... kodu girdikten sonra bağlantınız kurulacaktır.
 ```
 
-Önce bir ağ oluşturacağız. Bu ağda; hem VPN bağlantısını kuracağınız konteyner hem de bu konteyner üstünden VPN ağına erişmek istediğiniz konteynerler olacaktır.
+Önce `bridge` türünde bir ağ oluşturacağız (sanal ağ türleri için [ip-link kılavuzuna bkz](https://man7.org/linux/man-pages/man8/ip-link.8.html)). 
+
+![image](https://user-images.githubusercontent.com/261946/145689849-b386bf6e-0684-4041-a0ad-a3768cfe8cd5.png)
+
+Bu ağda; hem VPN bağlantısını kuracağınız konteyner hem de bu konteyner üstünden VPN ağına erişmek istediğiniz konteynerler olacaktır.
 ```bash
 # bir ağ yaratalım ki buradaki konteynerler VPN bağlantılı konteyneri GATEWAY olarak alıp VPN ağına çıkabilsinler
-$ docker network create --subnet=172.30.0.0/16 fortinet 
+$ docker network create    \
+  --driver=bridge          \
+  --subnet=172.30.1.0/16   \ # 255.255.0.0 olacak şekilde alt ağ maskesi ayarlıyoruz 
+  --ip-range=172.30.1.0/24 \ # 172.30.1.1-254 arasında IP dağıtacağız
+  --gateway=172.30.1.254   \ # Kapımız ...254 IP adresinden olacak
+  fortinet                   # Ağın adı fortinet olsun
 
 $ docker run                         \
      -it                             \ # şifre veya bir cevap vermemiz için interactive terminal yapıyoruz
      --rm                            \ # konteynerden çıkıldığında otomatik silinsin
      --privileged                    \ # root yetkisinde konteyner başlatılsın
      --net fortinet                  \ # az önce oluşturduğumuz network'e bağlansın ki, diğer konteynerleri buraya bağlayıp üstünden çıksınlar
-     --ip 172.30.0.2                 \ # konteynerin IP'sini sabitleyelim ki routingi bunun üstünden yapacağız
+     --ip 172.30.1.2                 \ # konteynerin IP'sini sabitleyelim ki routingi bu IP üstünden yapalım
      -e VPNADDR=176.236.170.162:443  \ # VPN sunucusunun IP adresi ve port bilgisi
      -e VPNUSER=cem.topkaya          \ # VPN kullanıcı adı
      -e VPNPASS=kullaniciSifresi     \
@@ -78,28 +87,66 @@ $ docker run                         \
      auchandirect/forticlient
 ```` 
 
+> Alt ağı 16 olarak ayarladığımızda [192.168.0.0/16](http://jodies.de/ipcalc?host=192.168.0.0&mask1=16&mask2=) nasıl bir ağa erişebildiğimizi görebiliriz.
+> ![image](https://user-images.githubusercontent.com/261946/145690248-2210e97a-814a-4cad-871e-5446b924731f.png)
+
+
+Şimdi oluşturduğumuz `fortinet` ağına bir bakalım:
+```bash
+c:\>docker network inspect fortinet
+[
+    {
+        "Name": "fortinet",
+        "Id": "c7ebb770d663ac9bd4ab52e183f9ca620d123c75cd0c45644fdb9424466e0feb",
+        "Created": "2021-12-11T11:15:29.5962997Z",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.30.0.0/16"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {},
+        "Labels": {}
+    }
+]
+```
+
 Windows konsolda tek satırda çalıştırmak için:
 ```bash
 $ docker run --name=vpn -it --rm --privileged --net=fortinet --ip=172.30.0.2 -e VPNADDR=176.236.170.162:443 -e VPNUSER=cem.topkaya -e VPNPASS=sifre --mac-address=22-11-FF-CC-BB-AA  auchandirect/forticlient
 ```
 
 ```bash
-echo 1 > /proc/sys/net/ipv4/ip_forward
-iptables -A FORWARD -i eth0 -o ppp0 -j ACCEPT
-iptables -A FORWARD -i ppp0 -o eth0 -m state --state ESTABLISHED,RELATED -j ACCEPT
-iptables -t nat -A POSTROUTING -o ppp0 -j MASQUERADE
+$ echo 1 > /proc/sys/net/ipv4/ip_forward
+$ iptables -A FORWARD -i eth0 -o ppp0 -j ACCEPT
+$ iptables -A FORWARD -i ppp0 -o eth0 -m state --state ESTABLISHED,RELATED -j ACCEPT
+$ iptables -t nat -A POSTROUTING -o ppp0 -j MASQUERADE
 ```
 
 Kontrol etmek için:
 ```bash
-iptables -L
-iptables -S
+$ iptables -L
+$ iptables -S
 ```
 
 Oluşan IP tablosunu ihraç ve ithal etmek için:
 ```bash
-iptables-save > ~/ruleset-v4
-iptables-restore < ~/ruleset-v4
+$ iptables-save > ~/ruleset-v4
+$ iptables-restore < ~/ruleset-v4
 ```
 
 ## Usage
@@ -112,10 +159,10 @@ All of the container traffic is routed through the VPN, so you can in turn route
 
 ```bash
 # Create a docker network, to be able to control addresses
-docker network create --subnet=172.20.0.0/16 fortinet
+$ docker network create --subnet=172.20.0.0/16 fortinet
 
 # Start the priviledged docker container with a static ip
-docker run -it --rm \
+$ docker run -it --rm \
   --privileged \
   --net fortinet --ip 172.20.0.2 \
   -e VPNADDR=host:port \
@@ -124,10 +171,10 @@ docker run -it --rm \
   auchandirect/forticlient
 
 # Add route for you remote subnet (ex. 10.201.0.0/16)
-ip route add 10.201.0.0/16 via 172.20.0.2
+$ ip route add 10.201.0.0/16 via 172.20.0.2
 
 # Access remote host from the subnet
-ssh 10.201.8.1
+$ ssh 10.201.8.1
 ```
 
 ### OSX
