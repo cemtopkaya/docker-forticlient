@@ -17,9 +17,14 @@ Farklı linux sürümlerine kurulum için:
 Konteyner içinde `forticlient-sslvpn_amd64.deb` paketinin kurulmuş ve `start.sh` betiğinin çalışmasıyla bağlantı kurar.
 `start.sh` İçinde:
 - Ortam değişkenlerinde şunların boş olmamasını ister: `$VPNADDR`, `$VPNUSER`, `$VPNPASS"`
-- Linux üstünde NAT yaparak diğer 
+- Linux üstünde NAT yaparak:
 ![image](https://user-images.githubusercontent.com/261946/145686394-c9277b6d-b6ec-458e-b8b9-8ac1587ca591.png)
-
+```bash
+$ for iface in $(ip a | grep eth | grep inet | awk '{print $2}'); do iptables -t nat -A POSTROUTING -s "$iface" -j MASQUERADE; done
+$ iptables -t nat -L
+```
+![image](https://user-images.githubusercontent.com/261946/145708016-7acd9ee7-4356-4fc7-840c-34ed3f6d3b99.png)
+[ref: nat-list](https://www.cyberciti.biz/faq/how-to-list-all-iptables-rules-in-linux/)
 ---
 
 ### NAT ve IPTables'a Dair
