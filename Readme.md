@@ -73,18 +73,6 @@ $ docker network create    \
   --ip-range=172.30.1.0/24 \ # 172.30.1.1-254 arasında IP dağıtacağız
   --gateway=172.30.1.254   \ # Kapımız ...254 IP adresinden olacak
   fortinet                   # Ağın adı fortinet olsun
-
-$ docker run                         \
-     -it                             \ # şifre veya bir cevap vermemiz için interactive terminal yapıyoruz
-     --rm                            \ # konteynerden çıkıldığında otomatik silinsin
-     --privileged                    \ # root yetkisinde konteyner başlatılsın
-     --net fortinet                  \ # az önce oluşturduğumuz network'e bağlansın ki, diğer konteynerleri buraya bağlayıp üstünden çıksınlar
-     --ip 172.30.1.2                 \ # konteynerin IP'sini sabitleyelim ki routingi bu IP üstünden yapalım
-     -e VPNADDR=176.236.170.162:443  \ # VPN sunucusunun IP adresi ve port bilgisi
-     -e VPNUSER=cem.topkaya          \ # VPN kullanıcı adı
-     -e VPNPASS=kullaniciSifresi     \
-     --mac-address=E8-6A-64-BE-F8-47 \ # konteyner MAC adresini bilgisayarın MAC'i ile aynı yapalım ki doğrulansın
-     auchandirect/forticlient
 ```` 
 
 > Alt ağı 16 olarak ayarladığımızda [192.168.0.0/16](http://jodies.de/ipcalc?host=192.168.0.0&mask1=16&mask2=) nasıl bir ağa erişebildiğimizi görebiliriz.
@@ -93,12 +81,12 @@ $ docker run                         \
 
 Şimdi oluşturduğumuz `fortinet` ağına bir bakalım:
 ```bash
-c:\>docker network inspect fortinet
+C:\>docker inspect fortinet
 [
     {
         "Name": "fortinet",
-        "Id": "c7ebb770d663ac9bd4ab52e183f9ca620d123c75cd0c45644fdb9424466e0feb",
-        "Created": "2021-12-11T11:15:29.5962997Z",
+        "Id": "2b48262c094a045012372af63d3008ba8c409d839af9754c587e0accad30f857",
+        "Created": "2021-12-11T20:20:41.7355242Z",
         "Scope": "local",
         "Driver": "bridge",
         "EnableIPv6": false,
@@ -107,7 +95,9 @@ c:\>docker network inspect fortinet
             "Options": {},
             "Config": [
                 {
-                    "Subnet": "172.30.0.0/16"
+                    "Subnet": "172.30.1.0/24",
+                    "IPRange": "172.30.1.0/24",
+                    "Gateway": "172.30.1.1"
                 }
             ]
         },
@@ -123,6 +113,23 @@ c:\>docker network inspect fortinet
         "Labels": {}
     }
 ]
+
+C:\>
+```
+
+Şimdi VPN bağlantısı kurmak istediğimiz docker konteynerini başlatalım:
+```bash
+$ docker run                         \
+     -it                             \ # şifre veya bir cevap vermemiz için interactive terminal yapıyoruz
+     --rm                            \ # konteynerden çıkıldığında otomatik silinsin
+     --privileged                    \ # root yetkisinde konteyner başlatılsın
+     --net fortinet                  \ # az önce oluşturduğumuz network'e bağlansın ki, diğer konteynerleri buraya bağlayıp üstünden çıksınlar
+     --ip 172.30.1.2                 \ # konteynerin IP'sini sabitleyelim ki routingi bu IP üstünden yapalım
+     -e VPNADDR=176.236.170.162:443  \ # VPN sunucusunun IP adresi ve port bilgisi
+     -e VPNUSER=cem.topkaya          \ # VPN kullanıcı adı
+     -e VPNPASS=kullaniciSifresi     \
+     --mac-address=E8-6A-64-BE-F8-47 \ # konteyner MAC adresini bilgisayarın MAC'i ile aynı yapalım ki doğrulansın
+     auchandirect/forticlient
 ```
 
 Windows konsolda tek satırda çalıştırmak için:
@@ -131,6 +138,7 @@ $ docker run --name=vpn -it --rm --privileged --net=fortinet --ip=172.30.0.2 -e 
 ```
 
 ```bash
+$ docker exec -it --user root vpn bash 
 $ echo 1 > /proc/sys/net/ipv4/ip_forward
 $ iptables -A FORWARD -i eth0 -o ppp0 -j ACCEPT
 $ iptables -A FORWARD -i ppp0 -o eth0 -m state --state ESTABLISHED,RELATED -j ACCEPT
@@ -147,6 +155,55 @@ Oluşan IP tablosunu ihraç ve ithal etmek için:
 ```bash
 $ iptables-save > ~/ruleset-v4
 $ iptables-restore < ~/ruleset-v4
+```
+
+Şimdi Grafana'yı konteyner içinde çalıştırıp VPN ağındaki bir sunucuya erişmek isteyelim.
+Önce Grafana konteynerinin docker-compose dosyası:
+```bash
+# docker-compose -f "docker-compose.yaml" up -d --build grafana 
+# docker-compose -f "docker-compose.yaml" down
+version: '3'
+
+# Bu dosyanın dışında oluşturulduğu için 'external: true' olarak işaretleniyor.
+networks:
+  fortinet:
+    external: true
+    name: fortinet
+
+services:
+  grafana:
+    # fortinet ağına dahil olacak ki VPN ağına erişebilsin
+    networks:
+      - fortinet
+    container_name: cgrafana
+    image: grafana/grafana
+    privileged: true 
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - "./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml"
+    ports:
+    - 3000:3000
+```
+
+datasources.yml
+```yaml
+apiVersion: 1
+datasources:
+  - name: prometheus-ulak
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://172.19.0.85:31355
+    isDefault:
+    version: 1
+    editable: true
+```
+
+Grafana'yı ayaklandırıp VPN ağındaki `172.19.0.85` makinaya erişebilmesi için ip routing ayarını yapacağız:
+```bash
+$ docker-compose  -f "docker-compose.yaml" up -d --build grafana 
+docker exec -it --user root cgrafana route add -net 172.19.0.85/32 gw 172.30.1.2
 ```
 
 ## Usage
