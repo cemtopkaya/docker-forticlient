@@ -2,6 +2,33 @@
 
 ## Kısaca Kullanımı
 
+`docker-compose up -d` ile konteyner ayaklandırılır ancak çift yollu doğrulamada gelen eposta token değerini girmek için `stdin_open: true`, `tty: true` parametreleri daha sonra konteynere `attach` yapmak istediğimizde (`docker attach forti`) konsola TOKEN değerini yazabilmemizi sağlayacak. 
+```yaml
+version: "3.7"
+
+services:
+  forticlient:
+    container_name: forti
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cemt/docker-forticlient-vpn
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    environment:
+      - VPNADDR=host-ip:port
+      - VPNUSER=kullanici-adi
+      - VPNPASS=kullanici-sifresi
+      - VPNTIMEOUT=${VPNTIMEOUT:-60}
+    network_mode: "host"
+    privileged: true
+```
+
+Özetle:
+
+![image](https://user-images.githubusercontent.com/261946/147719902-c7985fd9-d88d-4d2c-9f86-b1092d40f3cb.png)
+
+--- 
 
 Kullanılan yansı [auchandirect/forticlient](https://hub.docker.com/r/auchandirect/forticlient/) eğer bulunamazsa ubuntu yansısına aşağıdaki forticlient-sslvpn paketini kurarak istediğiniz yansıyı oluşturabilirsiniz. 
 
