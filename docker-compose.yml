@@ -1,7 +1,21 @@
 version: "3.7"
 
+networks:
+  forti-vpn:
+      driver: bridge
+      driver_opts:
+          com.docker.network.enable_ipv6: "true"
+      ipam:
+          driver: default
+          config:
+              - subnet: 172.30.1.0/16    # 255.255.0.0 olacak şekilde alt ağ maskesi ayarlıyoruz 
+                gateway: 172.30.1.1      # Kapımız ...254 IP adresinden olacak
+              - subnet: "2001:3984:3989::/64"
+                gateway: "2001:3984:3989::1"
+
 services:
   forticlient:
+    privileged: true
     container_name: forti
     build:
       context: .
@@ -14,5 +28,20 @@ services:
       - VPNUSER=kullanici-adi
       - VPNPASS=kullanici-sifresi
       - VPNTIMEOUT=${VPNTIMEOUT:-60}
-    network_mode: "host"
+    networks:
+      forti-vpn:
+        ipv4_address: 172.30.1.2
+        ipv6_address: "2001:3984:3989::10"
+
+  grafana:
+    container_name: cgrafana
+    hostname: host-grafana
+    image: grafana/grafana
     privileged: true
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    ports:
+     - 3000:3000
+    networks:
+      forti-vpn:
+        ipv4_address: 172.30.1.3
