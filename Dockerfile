@@ -2,7 +2,8 @@ FROM ubuntu:18.04
 
 ENV VPNADDR \
     VPNUSER \
-    VPNPASS
+    VPNPASS \
+    VPNTIMEOUT
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -15,11 +16,13 @@ RUN apt-get update && \
   ipppd \
   iptables \
   wget \
-  && apt-get clean -q && apt-get autoremove --purge \
-  && rm -rf /var/lib/apt/lists/*
+  nano
+  # \
+  # && apt-get clean -q && apt-get autoremove --purge \
+  # && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root
-
+USER root
 # Install fortivpn client unofficial .deb
 RUN wget 'https://hadler.me/files/forticlient-sslvpn_4.4.2329-1_amd64.deb' -O forticlient-sslvpn_amd64.deb
 RUN dpkg -x forticlient-sslvpn_amd64.deb /usr/share/forticlient && rm forticlient-sslvpn_amd64.deb
@@ -32,3 +35,5 @@ COPY forticlient /usr/bin/forticlient
 COPY start.sh /start.sh
 
 CMD [ "/start.sh" ]
+
+# CMD [ "./forticlientsslvpn_cli  --server ${VPNADDR} --vpnuser ${VPNUSER}" ]
