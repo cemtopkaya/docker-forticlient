@@ -28,6 +28,28 @@ services:
 
 ![image](https://user-images.githubusercontent.com/261946/147719902-c7985fd9-d88d-4d2c-9f86-b1092d40f3cb.png)
 
+VPN Konteynerini kullanması için `cgrafana` isimli bir konteyner daha ayaklandırıyorum.
+VPN'nin arkasındaki bir IP adresine `cgrafana` makinasından gitmek istediğimizde (`ping 172.19.0.85 -c 1`) hata alacağız:
+
+![image](https://user-images.githubusercontent.com/261946/147720972-c8203c0b-ad0a-46b8-91cd-a60e803f6ed9.png)
+
+Çünkü bu adrese gitmek için bir yönlendirme tanımlı değil (`route -n`) :
+
+![image](https://user-images.githubusercontent.com/261946/147721017-46387ea5-4a75-453b-98fe-af9d3f0bdc71.png)
+
+VPN yapan konteyner kendisine gelen istekleri yönlendirmek için `iptables -t nat -A POSTROUTING -s "$iface" -j MASQUERADE` komutunu çalıştırmış, gelen isteği -> SSL bağlantısına yönlendirip SSL bağlantısından gelen cevabı -> isteği yapana doğru yönlendiriyor:
+
+![image](https://user-images.githubusercontent.com/261946/147721141-64f99c36-2a90-476f-933d-18cf25af823c.png)
+
+Şimdi `cgrafana` konteynerinde şunu yapacağız: 
+> VPN'nin arkasındaki IP adresine bir istek olduğunda VPN konteynerinin IP adresine yönlendirme 
+
+```shell
+ip route add 172.19.0.0/16 via 172.30.1.2
+```
+
+![image](https://user-images.githubusercontent.com/261946/147721366-7cc049f9-25e0-4cc0-9476-caadb1b44c13.png)
+
 --- 
 
 Kullanılan yansı [auchandirect/forticlient](https://hub.docker.com/r/auchandirect/forticlient/) eğer bulunamazsa ubuntu yansısına aşağıdaki forticlient-sslvpn paketini kurarak istediğiniz yansıyı oluşturabilirsiniz. 
