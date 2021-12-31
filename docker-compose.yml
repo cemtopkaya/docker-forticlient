@@ -42,6 +42,8 @@ services:
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     ports:
      - 3000:3000
+    volumes:
+      - "./datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yml"
     networks:
       forti-vpn:
         ipv4_address: 172.30.1.3
