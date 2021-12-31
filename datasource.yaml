@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: prometheus-ulak
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://172.19.0.85:31355
+    isDefault:
+    version: 1
+    editable: true
